@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Пользователи — Сервис ремонта</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="navbar-brand">Сервис ремонта</div>
+    <div class="navbar-links">
+      <a href="requests.html">Заявки</a>
+      <a href="users.html">Пользователи</a>
+    </div>
+    <div class="navbar-user">
+      <span id="currentUser"></span>
+      <span id="currentRole"></span>
+      <button onclick="logout()">Выйти</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page">
+      <div class="page-header">
+        <h2>Пользователи</h2>
+        <button class="btn-primary" onclick="toggleForm()">+ Добавить</button>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+      <div class="success-msg" id="successMsg"></div>
+
+      <form class="inline-form" id="createForm" onsubmit="createUser(event)">
+        <input type="email" id="fEmail" placeholder="Email *" required>
+        <input type="password" id="fPassword" placeholder="Пароль *" required>
+        <input type="text" id="fFullName" placeholder="ФИО">
+        <input type="text" id="fPhone" placeholder="Телефон">
+        <input type="text" id="fAddress" placeholder="Адрес">
+        <button type="submit">Создать</button>
+      </form>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>ФИО</th>
+            <th>Телефон</th>
+            <th>Адрес</th>
+            <th>Роль</th>
+            <th id="actionsHeader" class="hidden">Действия</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6" class="empty">Загрузка...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    const token = localStorage.getItem("token");
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    if (!token || !user) { window.location.href = "login.html"; }
+
+    const api = axios.create({ headers: { Authorization: "Bearer " + token } });
+    const isAdmin = user.role === "admin";
+
+    document.getElementById("currentUser").textContent = user.fullName || user.email;
+    document.getElementById("currentRole").className = "role-badge " + user.role;
+    document.getElementById("currentRole").textContent = user.role;
+    if (isAdmin) document.getElementById("actionsHeader").classList.remove("hidden");
+
+    function logout() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "login.html";
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("errorMsg");
+      el.textContent = msg; el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 4000);
+    }
+    function showSuccess(msg) {
+      const el = document.getElementById("successMsg");
+      el.textContent = msg; el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 3000);
+    }
+
+    function toggleForm() {
+      document.getElementById("createForm").classList.toggle("visible");
+    }
+
+    async function loadUsers() {
+      try {
+        const { data } = await api.get("/users");
+        const tbody = document.getElementById("tableBody");
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет пользователей</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(u => `
+          <tr>
+            <td>${u.email}</td>
+            <td>${u.fullName}</td>
+            <td>${u.phone}</td>
+            <td>${u.address}</td>
+            <td><span class="role-badge ${u.role}">${u.role}</span></td>
+            ${isAdmin ? `<td><button class="btn-danger" onclick="deleteUser('${u.id}')">Удалить</button></td>` : ""}
+          </tr>
+        `).join("");
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+        showError(err.response?.data?.error || "Ошибка загрузки");
+      }
+    }
+
+    async function createUser(e) {
+      e.preventDefault();
+      try {
+        await api.post("/users", {
+          email: document.getElementById("fEmail").value,
+          password: document.getElementById("fPassword").value,
+          fullName: document.getElementById("fFullName").value,
+          phone: document.getElementById("fPhone").value,
+          address: document.getElementById("fAddress").value
+        });
+        document.getElementById("createForm").reset();
+        document.getElementById("createForm").classList.remove("visible");
+        showSuccess("Пользователь создан");
+        loadUsers();
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+        showError(err.response?.data?.error || "Ошибка создания");
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm("Удалить пользователя?")) return;
+      try {
+        await api.delete("/users/" + id);
+        showSuccess("Пользователь удалён");
+        loadUsers();
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+        showError(err.response?.data?.error || "Ошибка удаления");
+      }
+    }
+
+    loadUsers();
+  </script>
+</body>
+</html>

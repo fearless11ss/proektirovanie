@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Заявки — Сервис ремонта</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="navbar-brand">Сервис ремонта</div>
+    <div class="navbar-links">
+      <a href="requests.html">Заявки</a>
+      <a href="users.html">Пользователи</a>
+    </div>
+    <div class="navbar-user">
+      <span id="currentUser"></span>
+      <span id="currentRole"></span>
+      <button onclick="logout()">Выйти</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page">
+      <div class="page-header">
+        <h2>Заявки на ремонт</h2>
+        <button class="btn-primary" onclick="toggleForm()">+ Новая заявка</button>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+      <div class="success-msg" id="successMsg"></div>
+
+      <form class="inline-form" id="createForm" onsubmit="createRequest(event)">
+        <select id="fUserId" required>
+          <option value="">-- Клиент --</option>
+        </select>
+        <input type="text" id="fBrand" placeholder="Бренд устройства">
+        <input type="text" id="fModel" placeholder="Модель устройства">
+        <input type="text" id="fImei" placeholder="IMEI">
+        <input type="text" id="fIssue" placeholder="Описание проблемы">
+        <select id="fStatus">
+          <option value="new">Новая</option>
+          <option value="diagnostics">Диагностика</option>
+          <option value="repairing">В ремонте</option>
+          <option value="ready">Готова</option>
+          <option value="issued">Выдана</option>
+          <option value="cancelled">Отменена</option>
+        </select>
+        <input type="number" id="fEstCost" placeholder="Предв. стоимость" step="0.01">
+        <input type="number" id="fFinalCost" placeholder="Итог. стоимость" step="0.01">
+        <button type="submit">Создать</button>
+      </form>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Бренд</th>
+            <th>Модель</th>
+            <th>IMEI</th>
+            <th>Проблема</th>
+            <th>Статус</th>
+            <th>Предв. цена</th>
+            <th>Итого</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="8" class="empty">Загрузка...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    const STATUS_MAP = {
+      new: "Новая", diagnostics: "Диагностика", repairing: "В ремонте",
+      ready: "Готова", issued: "Выдана", cancelled: "Отменена"
+    };
+
+    const token = localStorage.getItem("token");
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    if (!token || !user) { window.location.href = "login.html"; }
+
+    const api = axios.create({ headers: { Authorization: "Bearer " + token } });
+
+    document.getElementById("currentUser").textContent = user.fullName || user.email;
+    document.getElementById("currentRole").className = "role-badge " + user.role;
+    document.getElementById("currentRole").textContent = user.role;
+
+    function logout() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "login.html";
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("errorMsg");
+      el.textContent = msg; el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 4000);
+    }
+    function showSuccess(msg) {
+      const el = document.getElementById("successMsg");
+      el.textContent = msg; el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 3000);
+    }
+
+    function toggleForm() {
+      const form = document.getElementById("createForm");
+      form.classList.toggle("visible");
+      if (form.classList.contains("visible")) loadUsersForSelect();
+    }
+
+    async function loadUsersForSelect() {
+      try {
+        const { data } = await api.get("/users");
+        const sel = document.getElementById("fUserId");
+        sel.innerHTML = '<option value="">-- Клиент --</option>' +
+          data.map(u => `<option value="${u.id}">${u.fullName} (${u.email})</option>`).join("");
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+      }
+    }
+
+    async function loadRequests() {
+      try {
+        const { data } = await api.get("/requests");
+        const tbody = document.getElementById("tableBody");
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty">Нет заявок</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(r => `
+          <tr>
+            <td>${r.deviceBrand}</td>
+            <td>${r.deviceModel}</td>
+            <td>${r.imei}</td>
+            <td>${r.issueDescription}</td>
+            <td><span class="status-badge ${r.status}">${STATUS_MAP[r.status] || r.status}</span></td>
+            <td>${r.estimatedCost} ₽</td>
+            <td>${r.finalCost} ₽</td>
+            <td><button class="btn-danger" onclick="deleteRequest('${r.id}')">Удалить</button></td>
+          </tr>
+        `).join("");
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+        showError(err.response?.data?.error || "Ошибка загрузки");
+      }
+    }
+
+    async function createRequest(e) {
+      e.preventDefault();
+      try {
+        await api.post("/requests", {
+          userId: document.getElementById("fUserId").value,
+          deviceBrand: document.getElementById("fBrand").value,
+          deviceModel: document.getElementById("fModel").value,
+          imei: document.getElementById("fImei").value,
+          issueDescription: document.getElementById("fIssue").value,
+          status: document.getElementById("fStatus").value,
+          estimatedCost: Number(document.getElementById("fEstCost").value) || 0,
+          finalCost: Number(document.getElementById("fFinalCost").value) || 0
+        });
+        document.getElementById("createForm").reset();
+        document.getElementById("createForm").classList.remove("visible");
+        showSuccess("Заявка создана");
+        loadRequests();
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+        showError(err.response?.data?.error || "Ошибка создания");
+      }
+    }
+
+    async function deleteRequest(id) {
+      if (!confirm("Удалить заявку?")) return;
+      try {
+        await api.delete("/requests/" + id);
+        showSuccess("Заявка удалена");
+        loadRequests();
+      } catch (err) {
+        if (err.response?.status === 401) return logout();
+        showError(err.response?.data?.error || "Ошибка удаления");
+      }
+    }
+
+    loadRequests();
+  </script>
+</body>
+</html>

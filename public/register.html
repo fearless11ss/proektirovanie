@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Регистрация — Сервис ремонта</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <form class="auth-form" id="registerForm">
+      <h2>Регистрация</h2>
+      <div class="error-msg" id="errorMsg"></div>
+      <label>
+        Email *
+        <input type="email" id="email" required>
+      </label>
+      <label>
+        Пароль * (мин. 6 символов)
+        <input type="password" id="password" required minlength="6">
+      </label>
+      <label>
+        ФИО *
+        <input type="text" id="fullName" required minlength="2">
+      </label>
+      <label>
+        Телефон *
+        <input type="tel" id="phone" required pattern="^\+?\d{7,15}$" title="Только цифры (7–15), можно начать с +">
+      </label>
+      <label>
+        Адрес
+        <input type="text" id="address">
+      </label>
+      <button type="submit">Зарегистрироваться</button>
+      <p class="auth-link">Уже есть аккаунт? <a href="login.html">Войти</a></p>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    if (localStorage.getItem("token")) {
+      window.location.href = "requests.html";
+    }
+
+    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById("errorMsg");
+      errEl.classList.remove("visible");
+
+      const body = {
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value,
+        fullName: document.getElementById("fullName").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        address: document.getElementById("address").value.trim()
+      };
+
+      if (body.password.length < 6) {
+        errEl.textContent = "Пароль должен быть не менее 6 символов";
+        errEl.classList.add("visible");
+        return;
+      }
+      if (body.fullName.length < 2) {
+        errEl.textContent = "Укажите ФИО (минимум 2 символа)";
+        errEl.classList.add("visible");
+        return;
+      }
+      if (!/^\+?\d{7,15}$/.test(body.phone)) {
+        errEl.textContent = "Телефон: только цифры (7–15 символов), можно начать с +";
+        errEl.classList.add("visible");
+        return;
+      }
+
+      try {
+        const { data } = await axios.post("/auth/register", body);
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        window.location.href = "requests.html";
+      } catch (err) {
+        errEl.textContent = err.response?.data?.error || "Ошибка регистрации";
+        errEl.classList.add("visible");
+      }
+    });
+  </script>
+</body>
+</html>
