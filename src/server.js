@@ -13,7 +13,19 @@ require("./db/models");
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.set("Cache-Control", "no-store");
+  }
+  next();
+});
+app.use(
+  express.static(path.join(__dirname, "..", "public"), {
+    etag: true,
+    lastModified: true,
+    maxAge: "10m"
+  })
+);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

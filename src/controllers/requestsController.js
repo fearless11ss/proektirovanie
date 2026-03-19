@@ -1,6 +1,7 @@
 const express = require("express");
 const { User, Request } = require("../db/models");
 const { requireAuth } = require("../middleware/auth");
+const { sendConditionalJson } = require("../utils/httpCache");
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ router.get("/", requireAuth, async (_req, res, next) => {
     const requests = await Request.findAll({
       order: [["created_at", "ASC"]]
     });
-    res.json(requests);
+    sendConditionalJson(_req, res, requests, { maxAge: 30 });
   } catch (err) {
     next(err);
   }
@@ -23,7 +24,7 @@ router.get("/:id", requireAuth, async (req, res, next) => {
     if (!request) {
       return res.status(404).json({ error: "Заявка не найдена" });
     }
-    res.json(request);
+    sendConditionalJson(req, res, request, { maxAge: 20 });
   } catch (err) {
     next(err);
   }

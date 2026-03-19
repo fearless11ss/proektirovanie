@@ -1,6 +1,7 @@
 const express = require("express");
 const { User, Request } = require("../db/models");
 const { requireAuth, requireAdmin } = require("../middleware/auth");
+const { sendConditionalJson } = require("../utils/httpCache");
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ router.get("/", requireAuth, async (_req, res, next) => {
       order: [["created_at", "ASC"]],
       attributes: { exclude: ["password"] }
     });
-    res.json(users);
+    sendConditionalJson(_req, res, users, { maxAge: 30 });
   } catch (err) {
     next(err);
   }
@@ -25,7 +26,7 @@ router.get("/:id", requireAuth, async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ error: "Пользователь не найден" });
     }
-    res.json(user);
+    sendConditionalJson(req, res, user, { maxAge: 20 });
   } catch (err) {
     next(err);
   }
